@@ -1,0 +1,40 @@
+{
+  "request_id": "request_hotpot_ai_answer_001",
+  "user_id": "demo_user",
+
+  "dataset_request": {
+    "dataset_key": "hotpotqa",
+    "topic_query": null,
+    "domain": "open_domain",
+    "question_types": ["multi_hop_reasoning"],
+    "allow_profile_suggestion": false,
+    "selection_scope": "single_profile"
+  },
+
+  "quiz_request": {
+    "total_questions": 3,
+    "questions_per_round": 1
+  },
+
+  "planner": {
+    "collection_plan": "1b1-ordered",
+    "progress_plan": "partial_eval",
+    "question_selection_plan": "unseen_only",
+    "topic_match_mode": "none",
+    "insufficient_question_policy": "allow_fallback",
+    "repeat_probability": 0.0,
+    "random_seed": 42,
+    "seen_question_ids": []
+  },
+
+  "answer_request": {
+    "answer_source": "llm_generated",
+    "evaluator_mode": "real",
+    "allow_mock_fallback": false
+  },
+
+  "report_request": {
+    "progressive_report": true,
+    "final_report": true
+  }
+}

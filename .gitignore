@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+
+# Secrets
+.env
+*.env
+openai_key.txt
+secrets.json
+
+# Mac
+.DS_Store
+
+# Runtime results/logs
+data/results/
+data/logs/
+*.jsonl

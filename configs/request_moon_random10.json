@@ -1,0 +1,37 @@
+{
+  "request_id": "request_moon_random10_001",
+  "user_id": "demo_user",
+
+  "dataset_request": {
+    "dataset_key": null,
+    "topic_query": "moon",
+    "domain": null,
+    "question_types": [],
+    "allow_profile_suggestion": true
+  },
+
+  "quiz_request": {
+    "total_questions": 10,
+    "questions_per_round": 1
+  },
+
+  "planner": {
+    "collection_plan": "1b1-random",
+    "progress_plan": "partial_eval",
+    "question_selection_plan": "unseen_only",
+    "repeat_probability": 0.0,
+    "random_seed": 123,
+    "seen_question_ids": []
+  },
+
+  "answer_request": {
+    "answer_source": "manual",
+    "evaluator_mode": "real",
+    "allow_mock_fallback": false
+  },
+
+  "report_request": {
+    "progressive_report": true,
+    "final_report": true
+  }
+}

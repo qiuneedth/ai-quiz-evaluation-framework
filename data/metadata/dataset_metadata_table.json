@@ -1,0 +1,250 @@
+[
+  {
+    "dataset_name": "hotpotqa/hotpot_qa",
+    "dataset_category": "Question Answering",
+    "summary": "HotpotQA is a multi-hop question answering dataset that includes questions, answers, supporting facts, and context documents, facilitating context-based reasoning and RAG-style evaluation.",
+    "num_preview_samples": 5,
+    "fields": [
+      "answer",
+      "context",
+      "id",
+      "level",
+      "question",
+      "supporting_facts",
+      "type"
+    ],
+    "has_context": true,
+    "has_options": false,
+    "has_reference_answer": true,
+    "question_type": "short_answer",
+    "answer_type": "free_text",
+    "topic": "General Knowledge",
+    "difficulty": "mixed",
+    "recommended_evaluation_methods": [
+      "rule_based_exact_match",
+      "exact_match_baseline",
+      "semantic_similarity",
+      "llm_as_judge",
+      "rag_based_evaluation",
+      "rubric_based_evaluation",
+      "rag_rubric_judge",
+      "multi_stage_evaluation",
+      "llm_jury"
+    ],
+    "recommended_metrics": [
+      "correctness",
+      "relevance",
+      "completeness",
+      "groundedness",
+      "faithfulness",
+      "hallucination_rate",
+      "semantic_similarity",
+      "keyword_coverage",
+      "answer_overlap",
+      "reasoning_quality",
+      "clarity"
+    ],
+    "reasoning_required": true,
+    "notes": "The dataset is designed for evaluating multi-hop reasoning capabilities in question answering systems.",
+    "filtered_evaluation_methods": [
+      "rule_based_exact_match",
+      "exact_match_baseline",
+      "semantic_similarity",
+      "llm_as_judge",
+      "rag_based_evaluation",
+      "rubric_based_evaluation",
+      "rag_rubric_judge",
+      "multi_stage_evaluation",
+      "llm_jury"
+    ],
+    "filtered_metrics": [
+      "correctness",
+      "relevance",
+      "completeness",
+      "groundedness",
+      "faithfulness",
+      "hallucination_rate",
+      "semantic_similarity",
+      "keyword_coverage",
+      "answer_overlap",
+      "reasoning_quality",
+      "clarity"
+    ],
+    "postprocessing_notes": "Rules applied: remove RAG methods if no context; remove exact match if no reference answer; prioritize rule-based evaluation for true/false questions."
+  },
+  {
+    "dataset_name": "mandarjoshi/trivia_qa",
+    "dataset_category": "Question Answering",
+    "summary": "TriviaQA is a reading comprehension QA dataset that contains trivia questions, answers, and evidence documents. It is useful for answer correctness and evidence-based evaluation.",
+    "num_preview_samples": 5,
+    "fields": [
+      "answer",
+      "entity_pages",
+      "question",
+      "question_id",
+      "question_source",
+      "search_results"
+    ],
+    "has_context": false,
+    "has_options": false,
+    "has_reference_answer": true,
+    "question_type": "short_answer",
+    "answer_type": "single_label",
+    "topic": "General Knowledge",
+    "difficulty": "medium",
+    "recommended_evaluation_methods": [
+      "exact_match_baseline",
+      "semantic_similarity",
+      "rag_based_evaluation"
+    ],
+    "recommended_metrics": [
+      "correctness",
+      "relevance",
+      "groundedness"
+    ],
+    "reasoning_required": true,
+    "notes": "The dataset is designed for evaluating the correctness of answers based on provided evidence.",
+    "filtered_evaluation_methods": [
+      "exact_match_baseline",
+      "semantic_similarity"
+    ],
+    "filtered_metrics": [
+      "correctness",
+      "relevance"
+    ],
+    "postprocessing_notes": "Rules applied: remove RAG methods if no context; remove exact match if no reference answer; prioritize rule-based evaluation for true/false questions."
+  },
+  {
+    "dataset_name": "ChilleD/StrategyQA",
+    "dataset_category": "Question Answering",
+    "summary": "StrategyQA is a yes/no question answering dataset that requires implicit reasoning for answering questions, making it suitable for boolean QA and reasoning evaluation.",
+    "num_preview_samples": 5,
+    "fields": [
+      "answer",
+      "description",
+      "facts",
+      "qid",
+      "question",
+      "term"
+    ],
+    "has_context": false,
+    "has_options": false,
+    "has_reference_answer": true,
+    "question_type": "true_false",
+    "answer_type": "boolean",
+    "topic": "General Knowledge",
+    "difficulty": "medium",
+    "recommended_evaluation_methods": [
+      "rule_based_exact_match",
+      "exact_match_baseline",
+      "semantic_similarity",
+      "llm_as_judge",
+      "rag_based_evaluation",
+      "rubric_based_evaluation",
+      "rag_rubric_judge",
+      "multi_stage_evaluation",
+      "llm_jury"
+    ],
+    "recommended_metrics": [
+      "correctness",
+      "relevance",
+      "completeness",
+      "groundedness",
+      "faithfulness",
+      "hallucination_rate",
+      "semantic_similarity",
+      "keyword_coverage",
+      "answer_overlap",
+      "reasoning_quality",
+      "clarity"
+    ],
+    "reasoning_required": true,
+    "notes": "The dataset focuses on questions that require reasoning and understanding of context, making it a valuable resource for evaluating AI models in boolean question answering.",
+    "filtered_evaluation_methods": [
+      "rule_based_exact_match",
+      "exact_match_baseline",
+      "semantic_similarity",
+      "llm_as_judge",
+      "multi_stage_evaluation",
+      "llm_jury"
+    ],
+    "filtered_metrics": [
+      "correctness",
+      "relevance",
+      "completeness",
+      "semantic_similarity",
+      "keyword_coverage",
+      "answer_overlap",
+      "reasoning_quality",
+      "clarity"
+    ],
+    "postprocessing_notes": "Rules applied: remove RAG methods if no context; remove exact match if no reference answer; prioritize rule-based evaluation for true/false questions."
+  },
+  {
+    "dataset_name": "galileo-ai/ragbench",
+    "dataset_category": "RAG evaluation dataset",
+    "summary": "RAGBench CovidQA is a RAG evaluation dataset containing questions, retrieved documents, generated responses, and evaluation-related scores, useful for evaluating groundedness, faithfulness, context relevance, and answer quality.",
+    "num_preview_samples": 5,
+    "fields": [
+      "adherence_score",
+      "all_relevant_sentence_keys",
+      "all_utilized_sentence_keys",
+      "annotating_model_name",
+      "completeness_score",
+      "dataset_name",
+      "documents",
+      "documents_sentences",
+      "generation_model_name",
+      "gpt35_utilization",
+      "gpt3_adherence",
+      "gpt3_context_relevance",
+      "id",
+      "overall_supported_explanation",
+      "question",
+      "ragas_context_relevance",
+      "ragas_faithfulness",
+      "relevance_explanation",
+      "relevance_score",
+      "response",
+      "response_sentences",
+      "sentence_support_information",
+      "trulens_context_relevance",
+      "trulens_groundedness",
+      "unsupported_response_sentence_keys",
+      "utilization_score"
+    ],
+    "has_context": true,
+    "has_options": false,
+    "has_reference_answer": false,
+    "question_type": "open_ended",
+    "answer_type": "free_text",
+    "topic": "COVID-19 and related health topics",
+    "difficulty": "medium",
+    "recommended_evaluation_methods": [
+      "rule_based_exact_match",
+      "semantic_similarity",
+      "rag_based_evaluation"
+    ],
+    "recommended_metrics": [
+      "correctness",
+      "relevance",
+      "completeness",
+      "groundedness",
+      "faithfulness"
+    ],
+    "reasoning_required": true,
+    "notes": "The dataset is designed for evaluating the performance of RAG models in generating accurate and contextually relevant responses to health-related questions.",
+    "filtered_evaluation_methods": [
+      "semantic_similarity",
+      "rag_based_evaluation"
+    ],
+    "filtered_metrics": [
+      "correctness",
+      "relevance",
+      "completeness",
+      "groundedness",
+      "faithfulness"
+    ],
+    "postprocessing_notes": "Rules applied: remove RAG methods if no context; remove exact match if no reference answer; prioritize rule-based evaluation for true/false questions."
+  }
+]
