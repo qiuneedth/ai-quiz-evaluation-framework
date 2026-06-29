@@ -200,6 +200,7 @@ class ReportGenerator:
             # ------------------------------------------------------------
             "raw_score": result.get("raw_score", result.get("final_score")),
             "hint_adjustment": result.get("hint_adjustment", 0.0),
+            "hint_penalty": result.get("hint_penalty", 0.0),
             "score": result.get("final_score"),
             "final_score": result.get("final_score"),
             "is_correct": result.get("is_correct"),
@@ -283,14 +284,15 @@ class ReportGenerator:
                 return policy
 
         return {
-            "policy_name": "no_hint_score_policy_found",
-            "correct_no_hint": 1.0,
-            "wrong_no_hint": 0.0,
-            "correct_with_hint": 0.9,
-            "wrong_with_hint": -0.01,
-            "partial_with_hint_penalty": 0.05,
+            "policy_name": "hint_adjusted_non_negative_v1_fallback",
+            "raw_score_range": "[0, 1]",
+            "final_score_range": "[0, 1]",
+            "hint_penalty": 0.10,
+            "negative_scores_allowed": False,
             "description": (
-                "Default fallback policy. No explicit hint_score_policy was found in question results."
+                "Default fallback policy. The evaluator produces raw_score in [0, 1]. "
+                "If a hint was used, final_score = clamp(raw_score - 0.10, 0, 1). "
+                "Negative final scores are not used."
             ),
         }
 
@@ -335,3 +337,5 @@ class ReportGenerator:
             )
 
         return base
+    
+    

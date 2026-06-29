@@ -141,7 +141,11 @@ class AnswerExplanationGenerator:
             raw_text = response.choices[0].message.content or ""
             parsed = self._parse_json_from_text(raw_text)
 
-            return self._normalize_explanation(parsed)
+            return self._normalize_explanation(
+                parsed=parsed,
+                final_score=final_score,
+                is_correct=is_correct,
+            )
 
         except Exception as error:
             fallback = self._fallback_explanation(
@@ -187,6 +191,8 @@ Your job is to explain the result to the learner like a teacher.
 Return ONLY valid JSON with this exact structure:
 
 {{
+  "score_confirmed": 0.0,
+  "passed_confirmed": false,
   "short_feedback": "...",
   "question_understanding": "...",
   "key_concept": "...",
@@ -219,7 +225,10 @@ Return ONLY valid JSON with this exact structure:
 }}
 
 Rules:
+- Do not rescore the answer.
 - Do not change the given score.
+- Preserve the already assigned score in score_confirmed.
+- Preserve the already assigned correctness in passed_confirmed.
 - Do not say the user is correct if is_correct is false.
 - Do not say the user is wrong if is_correct is true.
 - Make the explanation useful as teaching material.
@@ -276,12 +285,20 @@ Evaluator raw outputs:
     def _normalize_explanation(
         self,
         parsed: dict,
+        final_score: float,
+        is_correct: bool,
     ) -> dict:
         """
         Ensure all expected fields exist.
+
+        The explanation generator must not rescore the answer. Therefore,
+        score_confirmed and passed_confirmed are forced to match the already
+        assigned evaluation result.
         """
 
         return {
+            "score_confirmed": final_score,
+            "passed_confirmed": is_correct,
             "short_feedback": parsed.get("short_feedback", ""),
             "question_understanding": parsed.get("question_understanding", ""),
             "key_concept": parsed.get("key_concept", ""),
@@ -334,6 +351,8 @@ Evaluator raw outputs:
             )
 
         return {
+            "score_confirmed": final_score,
+            "passed_confirmed": is_correct,
             "short_feedback": short_feedback,
             "question_understanding": f"The question asks: {question_text}",
             "key_concept": "Identify the main concept or fact required by the question.",

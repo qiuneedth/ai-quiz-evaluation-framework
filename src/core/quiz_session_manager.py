@@ -7,26 +7,29 @@ This module runs the quiz session after a quiz plan has been generated.
 
 Runtime workflow:
 1. Show current question.
-2. User may request one hint before answering.
-3. Receive user answer or generate AI answer.
-4. Run assigned evaluator(s).
-5. Show immediate feedback and detailed explanation.
-6. Generate progressive report.
-7. Continue until the session ends.
-8. Return session result for final report generation.
+2. If the question is context-dependent, show the provided context before answering.
+3. User may request one hint before answering.
+4. Receive user answer or generate AI answer.
+5. Run assigned evaluator(s).
+6. Show immediate feedback and detailed explanation.
+7. Generate progressive report.
+8. Continue until the session ends.
+9. Return session result for final report generation.
 
 Important:
 - Hint happens before answer submission.
 - Hint is allowed only once per question.
-- Hint does not change the score.
+- Hint does not change the raw evaluator score.
 - Hint should be passed to EvaluationEngine before explanation is generated.
 - Hint should be stored in question_result and final_report.
+- For context-dependent datasets, context should be displayed before collecting the answer.
 """
 
 
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from src.core.hint_generator import HintGenerator
 
@@ -368,7 +371,10 @@ class QuizSessionManager:
             print("-" * 60)
             print(hint_text)
 
-            print("\nYou can now answer the question. The hint cannot be requested again for this question.")
+            print(
+                "\nYou can now answer the question. "
+                "The hint cannot be requested again for this question."
+            )
 
         user_answer = input("\nYour answer: ").strip()
 
@@ -403,28 +409,293 @@ class QuizSessionManager:
             "Expected method: get_answer, generate_answer, or provide_answer."
         )
 
+    # ============================================================
+    # Question display
+    # ============================================================
+
     def _print_question_for_user(
         self,
         question: dict,
     ) -> None:
+        """
+        Print question, context, and options before collecting the answer.
+
+        Important:
+        For datasets with context_dependency = provided_context_required,
+        such as HotpotQA, the context should be shown before the user answers.
+        """
+
         print("\nQuestion:")
-        print(question.get("question", ""))
+        print(self._get_question_text(question))
+
+        context_text = self._format_context_for_display(question)
+
+        if context_text:
+            print("\nContext:")
+            print("-" * 60)
+            print(context_text)
+            print("-" * 60)
+
+        options_text = self._format_options_for_display(question)
+
+        if options_text:
+            print("\nOptions:")
+            print(options_text)
+
+    def _get_question_text(
+        self,
+        question: dict,
+    ) -> str:
+        """
+        Extract question text from common field names.
+        """
+
+        return str(
+            question.get("question")
+            or question.get("question_text")
+            or question.get("query")
+            or question.get("input")
+            or ""
+        )
+
+    def _format_options_for_display(
+        self,
+        question: dict,
+    ) -> str:
+        """
+        Format multiple-choice options for display.
+
+        Supports:
+        1. {"A": "...", "B": "..."}
+        2. {"label": ["A", "B"], "text": ["...", "..."]}
+        3. [{"label": "A", "text": "..."}, ...]
+        4. ["A. ...", "B. ..."]
+        """
 
         options = question.get("options") or question.get("choices")
 
-        if options:
-            print("\nOptions:")
+        if not options:
+            return ""
 
-            if isinstance(options, dict):
+        lines = []
+
+        if isinstance(options, dict):
+            # Format used by some HF datasets:
+            # {"label": ["A", "B"], "text": ["...", "..."]}
+            if "label" in options and "text" in options:
                 labels = options.get("label", [])
                 texts = options.get("text", [])
 
                 for label, text in zip(labels, texts):
-                    print(f"- {label}: {text}")
+                    lines.append(f"- {label}: {text}")
 
-            elif isinstance(options, list):
-                for option in options:
-                    print(f"- {option}")
+            else:
+                # Simple dict format:
+                # {"A": "option text", "B": "option text"}
+                for label, text in options.items():
+                    lines.append(f"- {label}: {text}")
+
+        elif isinstance(options, list):
+            for option in options:
+                if isinstance(option, dict):
+                    label = (
+                        option.get("label")
+                        or option.get("key")
+                        or option.get("id")
+                        or ""
+                    )
+                    text = (
+                        option.get("text")
+                        or option.get("content")
+                        or option.get("value")
+                        or ""
+                    )
+
+                    if label and text:
+                        lines.append(f"- {label}: {text}")
+                    elif text:
+                        lines.append(f"- {text}")
+                    else:
+                        lines.append(f"- {option}")
+
+                else:
+                    lines.append(f"- {option}")
+
+        return "\n".join(lines)
+
+    def _format_context_for_display(
+        self,
+        question: dict,
+    ) -> str:
+        """
+        Extract and format context passages for user display.
+
+        Supports common context formats:
+
+        1. Plain string:
+           "context": "..."
+
+        2. HotpotQA-style:
+           "context": [
+               ["Title 1", ["sentence 1", "sentence 2"]],
+               ["Title 2", ["sentence 1", "sentence 2"]]
+           ]
+
+        3. List of dicts:
+           "context": [
+               {"title": "...", "text": "..."},
+               {"title": "...", "sentences": [...]}
+           ]
+
+        4. Dict:
+           "context": {"title": "...", "text": "..."}
+        """
+
+        context = self._extract_context(question)
+
+        if not context:
+            return ""
+
+        lines = []
+
+        if isinstance(context, str):
+            return context.strip()
+
+        if isinstance(context, list):
+            for index, item in enumerate(context, start=1):
+                formatted_item = self._format_context_item(item, index)
+
+                if formatted_item:
+                    lines.append(formatted_item)
+
+            return "\n\n".join(lines).strip()
+
+        if isinstance(context, dict):
+            return self._format_context_dict(context).strip()
+
+        return str(context).strip()
+
+    def _extract_context(
+        self,
+        question: dict,
+    ) -> Any:
+        """
+        Extract context from common field names.
+
+        Different datasets use different names.
+        This function tries several common keys.
+        """
+
+        possible_keys = [
+            "context",
+            "contexts",
+            "passages",
+            "paragraphs",
+            "provided_context",
+            "source_context",
+            "supporting_context",
+            "evidence",
+        ]
+
+        for key in possible_keys:
+            value = question.get(key)
+
+            if value:
+                return value
+
+        return None
+
+    def _format_context_item(
+        self,
+        item: Any,
+        index: int,
+    ) -> str:
+        """
+        Format one context item.
+        """
+
+        # Plain context sentence/passage.
+        if isinstance(item, str):
+            return f"[{index}] {item}"
+
+        # Dict format.
+        if isinstance(item, dict):
+            title = (
+                item.get("title")
+                or item.get("name")
+                or item.get("source")
+                or f"Passage {index}"
+            )
+
+            text = (
+                item.get("text")
+                or item.get("content")
+                or item.get("passage")
+                or item.get("paragraph")
+                or ""
+            )
+
+            sentences = item.get("sentences")
+
+            if not text and isinstance(sentences, list):
+                text = " ".join(str(sentence) for sentence in sentences)
+
+            if text:
+                return f"[{index}] {title}\n{text}"
+
+            return f"[{index}] {title}\n{item}"
+
+        # HotpotQA-style item:
+        # ["Title", ["sentence1", "sentence2"]]
+        if isinstance(item, list) and len(item) == 2:
+            title, sentences = item
+
+            if isinstance(sentences, list):
+                text = " ".join(str(sentence) for sentence in sentences)
+            else:
+                text = str(sentences)
+
+            return f"[{index}] {title}\n{text}"
+
+        # Fallback for unknown list/object format.
+        return f"[{index}] {str(item)}"
+
+    def _format_context_dict(
+        self,
+        context: dict,
+    ) -> str:
+        """
+        Format context if the whole context object is a dictionary.
+        """
+
+        title = (
+            context.get("title")
+            or context.get("name")
+            or context.get("source")
+            or "Context"
+        )
+
+        text = (
+            context.get("text")
+            or context.get("content")
+            or context.get("passage")
+            or context.get("paragraph")
+            or ""
+        )
+
+        sentences = context.get("sentences")
+
+        if not text and isinstance(sentences, list):
+            text = " ".join(str(sentence) for sentence in sentences)
+
+        if text:
+            return f"{title}\n{text}"
+
+        lines = []
+        for key, value in context.items():
+            lines.append(f"{key}: {value}")
+
+        return "\n".join(lines)
 
     # ============================================================
     # Immediate feedback

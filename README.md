@@ -1,209 +1,220 @@
-RAG_BASE/
-│
-├── data/
-│   ├── raw/
-│   │   Raw local quiz datasets in JSONL format.
-│   │   These files may have different original formats.
-│   │
-│   ├── processed/
-│   │   Unified datasets after conversion.
-│   │   All samples should follow the same schema.
-│   │
-│   └── results/
-│       Evaluation outputs produced by the framework.
+# A Multi-Agent Knowledge-Based AI Framework for Quiz Evaluation
+
+This repository contains the prototype implementation for the Bachelor thesis:
+
+**A Multi-Agent Knowledge-Based AI Framework for Quiz Evaluation**
+
+The project implements a modular quiz evaluation framework that connects dataset profiling, user request handling, quiz planning, answer generation or collection, automated answer evaluation, hint-adjusted scoring, and report generation.
+
+## Project Overview
+
+The framework is designed to evaluate quiz answers across different question types and dataset structures.
+
+It supports:
+
+* dataset profiling for Hugging Face quiz datasets
+* user request based dataset and question selection
+* quiz plan generation
+* round-based quiz delivery
+* rule-based and LLM-based answer evaluation
+* hint usage tracking
+* hint-adjusted final scoring
+* progressive and final report generation
+* runtime user activity logging
+
+The main goal is not to build a retrieval system, but to build an evaluation-management framework for quiz assessment.
+
+## Main Runtime Flow
+
+The main runtime workflow is:
+
+```text
+User Request JSON / Interactive Request
+    ↓
+Request Selector
+    ↓
+Selected Dataset Profile
+    ↓
+Quiz Plan Generator
+    ↓
+Round-Based Quiz Session
+    ↓
+Answer Provider
+    ↓
+Evaluation Engine
+    ↓
+Progressive Report / Final Report
+    ↓
+Runtime Log
+```
+
+The main entry point is:
+
+```text
+src/main_demo_runtime_session.py
+```
+
+## Evaluation and Scoring
+
+The framework supports different evaluation strategies depending on the question type and dataset profile.
+
+For objective question types such as multiple-choice or true/false questions, deterministic matching can be used.
+
+For free-text and context-dependent answers, LLM-based evaluators can use criteria such as:
+
+* semantic correctness
+* completeness
+* relevance
+* context support / groundedness
+
+The evaluator produces a raw score, pass/fail status, and feedback. The framework then applies the hint-adjusted scoring policy to compute the final score.
+
+In the current prototype, hint usage is explicitly tracked. If a hint is used, a fixed hint penalty is applied to the raw score to produce the final score.
+
+## Project Structure
+
+```text
+rag_base/
+├── configs/
+│   └── Example user request JSON files
 │
 ├── prompts/
-│   Prompt templates for different evaluation approaches.
-│   For example:
-│   - LLM-as-a-Judge
-│   - RAG-based judge
-│   - rubric-based judge
-│   - verifier
+│   └── Prompt templates used by evaluator and explanation modules
 │
 ├── src/
-│   ├── schemas.py
-│   │   Defines the unified quiz evaluation format.
-│   │   All datasets are converted into this schema.
-│   │
-│   ├── config.py
-│   │   Stores configuration such as model names and paths.
-│   │
-│   ├── main.py
-│   │   Entry point of the framework.
-│   │   Loads data, converts it, routes samples, evaluates them, and saves results.
+│   ├── core/
+│   │   └── Core framework modules
 │   │
 │   ├── data/
-│   │   ├── adapters.py
-│   │   │   Converts local JSONL datasets into the unified schema.
-│   │   │
-│   │   └── hf_adapters.py
-│   │       Loads Hugging Face datasets and converts them into the unified schema.
+│   │   └── Hugging Face dataset registry and loaders
 │   │
-│   ├── core/
-│   │   ├── router.py
-│   │   │   Chooses the evaluation approach based on question type and context.
-│   │   │
-│   │   ├── evaluator.py
-│   │   │   Runs the selected evaluation method.
-│   │   │
-│   │   ├── scorer.py
-│   │   │   Computes or aggregates final scores.
-│   │   │
-│   │   ├── retrieval.py
-│   │   │   Retrieves evidence documents or context chunks.
-│   │   │
-│   │   ├── verifier.py
-│   │   │   Optional second-pass validation.
-│   │   │
-│   │   └── aggregator.py
-│   │       Combines multiple scores or judge outputs.
+│   ├── evaluation/
+│   │   └── Evaluation experiment scripts
 │   │
-│   ├── llm/
-│   │   ├── client.py
-│   │   │   Handles OpenAI API calls.
-│   │   │
-│   │   └── prompt_loader.py
-│   │       Loads prompt templates from the prompts folder.
+│   ├── reports/
+│   │   └── Report generation modules
 │   │
-│   └── utils/
-│       ├── jsonl.py
-│       │   Helper functions for reading and writing JSONL files.
-│       │
-│       └── text.py
-│           Text processing helper functions.
+│   ├── storage/
+│   │   └── Runtime user activity logging
+│   │
+│   ├── utils/
+│   │   └── Utility functions
+│   │
+│   └── main_demo_runtime_session.py
+│
+├── archive/
+│   └── legacy/
+│       └── Earlier development scripts and legacy prototype modules
+│
+├── README.md
+├── requirements.txt
+├── .env.example
+└── .gitignore
+```
 
+## Legacy Files
 
-# AI / RAG-Based Quiz Evaluation Framework
+The `archive/legacy/` directory contains earlier development scripts and prototype modules.
 
-## Goal
+These files are kept for reference only. They are not part of the main runtime workflow.
 
-This project investigates AI-based and RAG-based approaches for quiz evaluation.
+The current main runtime entry point is:
 
-The goal is to build a modular framework that can evaluate different types of quiz answers using different evaluation strategies, such as:
+```bash
+python -m src.main_demo_runtime_session
+```
 
-- rule-based evaluation
-- semantic evaluation
-- LLM-as-a-Judge
-- RAG-based evaluation
-- rubric-based evaluation
-- multi-stage evaluation
+## Setup
 
-## Current Focus
+Create and activate a virtual environment:
 
-The current focus is not only to design individual prompts, but to build a higher-level framework for quiz evaluation.
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
 
-The framework should answer:
+Install dependencies:
 
-1. What type of question is this?
-2. Is context or retrieved evidence needed?
-3. Which evaluation approach should be used?
-4. Which scoring dimensions are relevant?
-5. How should the final score and explanation be produced?
+```bash
+pip install -r requirements.txt
+```
 
-## Framework Pipeline
+Create a local `.env` file based on `.env.example`:
 
-Raw dataset  
-→ Dataset adapter  
-→ Unified quiz schema  
-→ Task analyzer / router  
-→ Evaluation method  
-→ Scoring and explanation  
-→ Result JSON
+```text
+OPENAI_API_KEY=your_api_key_here
+OPENAI_CHAT_MODEL=gpt-4o-mini
+```
 
-## Unified Schema
+The `.env` file should not be committed to GitHub.
 
-All datasets are converted into one unified format:
+## Running the Main Runtime Demo
 
-- id
-- dataset
-- question_type
-- question
-- student_answer
-- reference_answer
-- context
-- options
-- requires_context
-- rubric
-- metadata
+The preferred way to run the main demo is with a request JSON file:
 
-## Dataset Adapters
+```bash
+python -m src.main_demo_runtime_session --request-file configs/request_science_manual.json --clear-log
+```
 
-There are two types of adapters:
+Another example request file can also be used:
 
-### Local dataset adapters
+```bash
+python -m src.main_demo_runtime_session --request-file configs/request_hotpot_ai_answer.json --clear-log
+```
 
-Defined in:
+The runtime demo can also be started interactively:
 
-`src/data/adapters.py`
+```bash
+python -m src.main_demo_runtime_session --interactive-request --clear-log
+```
 
-Used for local JSONL files in:
+To check whether the main entry point can be imported correctly:
 
-`data/raw/`
+```bash
+python -m src.main_demo_runtime_session --help
+```
 
-### Hugging Face dataset adapters
+## Running Evaluation Experiments
 
-Defined in:
+Run the simulated student experiment:
 
-`src/data/hf_adapters.py`
+```bash
+python -m src.evaluation.run_simulated_student_experiment
+```
 
-Used for datasets such as:
+Run the prompt sensitivity analysis:
 
-- HotpotQA
-- BoolQ
-- Natural Questions
-- RAGBench
+```bash
+python -m src.evaluation.run_prompt_sensitivity_analysis
+```
 
-## Evaluation Approaches
+## Output Files
 
-The framework will support different approaches:
+Runtime outputs are written to:
 
-### Rule-based / Exact Match
+```text
+data/results/
+```
 
-Used for MCQ and true/false questions.
+Typical output files include:
 
-### LLM-as-a-Judge
+```text
+runtime_user_activity.jsonl
+progressive_reports.jsonl
+final_report.json
+```
 
-Used for short answers without strong context requirements.
+These files are generated by the framework and do not need to be committed unless a small example output is intentionally included.
 
-### RAG-Based Evaluation
+## Notes
 
-Used when provided or retrieved context is required.
+This repository contains a thesis prototype. The system is intended to demonstrate the design and feasibility of a modular AI-based quiz evaluation framework.
 
-### Rubric-Centric RAG
+The implementation focuses on:
 
-Combines context, reference answer, and structured rubric.
-
-### Multi-Stage Evaluation
-
-Possible production-style pattern:
-
-retrieval  
-→ filtering  
-→ LLM scoring  
-→ optional verification
-
-## Current Implementation Plan
-
-This week, the goal is to implement a minimal prototype:
-
-1. Convert local JSONL samples into the unified schema.
-2. Route each sample to an evaluation method.
-3. Run rule-based evaluation for MCQ / true-false.
-4. Run RAG/rubric-based LLM evaluation for context-based short answers.
-5. Save structured evaluation results.
-6. Later, connect Hugging Face datasets through `hf_adapters.py`.
-
-## This Week's Main Task
-
-Build the framework structure first.
-
-The priority is:
-
-- unified schema
-- dataset adapter layer
-- router
-- basic evaluator
-- OpenAI API connection
-- small demo on local samples
-
-Hugging Face datasets will be added after the local pipeline works.
+* transparent evaluation workflow
+* dataset-aware evaluator selection
+* request-based quiz planning
+* auditable user activity logs
+* hint-adjusted final scoring
+* report generation for evaluation results

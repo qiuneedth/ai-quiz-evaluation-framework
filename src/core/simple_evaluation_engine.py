@@ -14,16 +14,12 @@ Important design:
 - The final_score is used in progressive report and final report.
 - raw_score is kept for transparency.
 
-Teacher feedback implemented:
-For correctness-style evaluation:
-    Correct + no hint  -> 1.0
-    Wrong + no hint    -> 0.0
-    Correct + hint     -> slightly less than 1, e.g. 0.9
-    Wrong + hint       -> small negative, e.g. -0.01
-
-For other evaluation dimensions such as completeness, relevance, and groundedness,
-hint may have a smaller effect. This engine keeps a simple general policy for now,
-but stores the policy explicitly so it can be extended later.
+Teacher review package implemented:
+- raw_score is produced by evaluators and is always kept in [0, 1].
+- final_score is computed after optional hint adjustment.
+- final_score = clamp(raw_score - hint_penalty, 0, 1).
+- hint_penalty = 0.10 when the learner used a hint before answering.
+- final_score is never negative.
 """
 
 
@@ -88,27 +84,30 @@ class SimpleEvaluationEngine:
         # ------------------------------------------------------------
         # Hint scoring policy.
         #
-        # This directly follows the latest supervisor feedback:
-        # Correct without hint = 1.0
-        # Wrong without hint   = 0.0
-        # Correct with hint    = 0.9
-        # Wrong with hint      = -0.01
+        # Updated according to the corrected scoring policy:
+        # raw_score always stays in [0, 1].
+        # final_score = clamp(raw_score - hint_penalty, 0, 1).
+        # No negative final scores are used.
         #
-        # For non-binary / partial-score evaluators, this policy also keeps
-        # a smaller hint penalty for partial answers.
+        # Examples:
+        # Correct + no hint  -> raw_score=1.0, final_score=1.0
+        # Correct + hint     -> raw_score=1.0, final_score=0.9
+        # Wrong + no hint    -> raw_score=0.0, final_score=0.0
+        # Wrong + hint       -> raw_score=0.0, final_score=0.0
+        # Partial + hint     -> raw_score=0.7, final_score=0.6
         # ------------------------------------------------------------
         self.hint_score_policy = {
-            "policy_name": "correctness_hint_adjusted_score_v1",
-            "correct_no_hint": 1.0,
-            "wrong_no_hint": 0.0,
-            "correct_with_hint": 0.9,
-            "wrong_with_hint": -0.01,
-            "partial_with_hint_penalty": 0.05,
+            "policy_name": "hint_adjusted_non_negative_v1",
+            "raw_score_range": "[0, 1]",
+            "final_score_range": "[0, 1]",
+            "hint_penalty": 0.10,
+            "negative_scores_allowed": False,
             "description": (
-                "Hint usage affects final_score but does not erase raw_score. "
-                "For correctness-style evaluation, correct answers with hint receive 0.9, "
-                "wrong answers with hint receive -0.01, correct answers without hint receive 1.0, "
-                "and wrong answers without hint receive 0.0."
+                "The evaluator produces raw_score in [0, 1]. "
+                "If a hint was used, final_score is computed as "
+                "clamp(raw_score - 0.10, 0, 1). "
+                "The raw evaluator score is preserved for transparency, "
+                "and the hint-adjusted final score is used for report aggregation."
             ),
         }
 
@@ -159,7 +158,7 @@ class SimpleEvaluationEngine:
 
         raw_score = self._aggregate_scores(evaluator_outputs)
 
-        # is_correct should be based on the evaluator result before hint penalty.
+        # raw_is_correct is based on the evaluator result before hint penalty.
         raw_is_correct = raw_score >= 0.999
 
         hint_adjustment_result = self._apply_hint_score_adjustment(
@@ -170,14 +169,15 @@ class SimpleEvaluationEngine:
 
         final_score = hint_adjustment_result["final_score"]
         hint_adjustment = hint_adjustment_result["hint_adjustment"]
+        hint_penalty = hint_adjustment_result["hint_penalty"]
 
         # Correctness label remains based on whether the answer itself is correct.
-        # For example, correct with hint should still be is_correct=True,
-        # even though final_score becomes 0.9.
+        # Correct with hint is still correct, although final_score is lower.
         is_correct = raw_is_correct
 
-        # passed can be based on final_score.
-        passed = final_score >= 0.5
+        # For learning-oriented interpretation, passed should be based on raw score.
+        # final_score is used for score aggregation after hint penalty.
+        passed = raw_score >= 0.5
 
         feedback = self._combine_feedback(evaluator_outputs)
 
@@ -220,8 +220,11 @@ class SimpleEvaluationEngine:
 
             # ------------------------------------------------------------
             # Score fields.
+            # raw_score: evaluator score before hint adjustment.
+            # final_score: score after optional hint penalty.
             # ------------------------------------------------------------
             "raw_score": round(raw_score, 4),
+            "hint_penalty": round(hint_penalty, 4),
             "hint_adjustment": round(hint_adjustment, 4),
             "final_score": round(final_score, 4),
             "hint_score_policy": self.hint_score_policy,
@@ -264,75 +267,52 @@ class SimpleEvaluationEngine:
         """
         Apply hint-adjusted scoring policy.
 
-        Main correctness policy:
-            Correct + no hint  -> 1.0
-            Wrong + no hint    -> 0.0
-            Correct + hint     -> 0.9
-            Wrong + hint       -> -0.01
+        Corrected policy:
+            raw_score is always in [0, 1].
+            final_score = clamp(raw_score - hint_penalty, 0, 1).
+            hint_penalty = 0.10 if hint was used, otherwise 0.
+            final_score is never negative.
 
-        For partial scores:
-            If hint is used and raw_score is between 0 and 1,
-            apply a small penalty.
+        This replaces the previous negative wrong-with-hint score.
         """
 
-        raw_score = self._safe_float(raw_score)
+        raw_score = self._clamp_score(self._safe_float(raw_score))
 
         if not hint_used:
             return {
                 "raw_score": raw_score,
                 "final_score": raw_score,
+                "hint_penalty": 0.0,
                 "hint_adjustment": 0.0,
                 "policy_applied": "no_hint_no_adjustment",
             }
 
-        metric_family = self._infer_metric_family(assigned_evaluators)
-
-        # Correctness-style binary case.
-        if raw_score >= 0.999:
-            if metric_family == "correctness":
-                final_score = self.hint_score_policy["correct_with_hint"]
-            else:
-                # For completeness / relevance / groundedness,
-                # hint has slightly less effect.
-                final_score = max(
-                    0.0,
-                    raw_score - self.hint_score_policy["partial_with_hint_penalty"],
-                )
-
-            return {
-                "raw_score": raw_score,
-                "final_score": final_score,
-                "hint_adjustment": final_score - raw_score,
-                "policy_applied": f"{metric_family}_correct_with_hint",
-            }
-
-        # Clearly wrong case.
-        if raw_score <= 0.0:
-            if metric_family == "correctness":
-                final_score = self.hint_score_policy["wrong_with_hint"]
-            else:
-                # For other dimensions, keep a smaller negative effect.
-                final_score = -0.005
-
-            return {
-                "raw_score": raw_score,
-                "final_score": final_score,
-                "hint_adjustment": final_score - raw_score,
-                "policy_applied": f"{metric_family}_wrong_with_hint",
-            }
-
-        # Partial score case.
-        final_score = max(
-            -0.01,
-            raw_score - self.hint_score_policy["partial_with_hint_penalty"],
+        hint_penalty = self._safe_float(
+            self.hint_score_policy.get("hint_penalty", 0.10)
         )
+
+        final_score = self._clamp_score(raw_score - hint_penalty)
 
         return {
             "raw_score": raw_score,
             "final_score": final_score,
+            "hint_penalty": hint_penalty,
             "hint_adjustment": final_score - raw_score,
-            "policy_applied": f"{metric_family}_partial_with_hint",
+            "policy_applied": "hint_adjusted_non_negative",
         }
+
+    def _clamp_score(
+        self,
+        value: float,
+        min_value: float = 0.0,
+        max_value: float = 1.0,
+    ) -> float:
+        """
+        Clamp score to [0, 1].
+        """
+
+        value = self._safe_float(value)
+        return max(min_value, min(max_value, value))
 
     def _infer_metric_family(
         self,
@@ -341,8 +321,9 @@ class SimpleEvaluationEngine:
         """
         Infer metric family from evaluator names.
 
-        This is useful because teacher mentioned that hint may have
-        different effect for correctness, completeness, relevance, etc.
+        Kept for compatibility with the previous implementation.
+        The current corrected scoring policy applies the same non-negative
+        hint penalty to all evaluator families.
         """
 
         names = " ".join(str(name).lower() for name in assigned_evaluators)
@@ -543,7 +524,7 @@ class SimpleEvaluationEngine:
     ) -> dict:
         return {
             "evaluator_name": evaluator_name,
-            "score": score,
+            "score": self._clamp_score(score),
             "passed": False,
             "details": {
                 "error_type": error_type,
@@ -553,7 +534,7 @@ class SimpleEvaluationEngine:
             "correct_answer_explanation": correct_answer_explanation,
             "learning_feedback": learning_feedback,
             "raw_output": {
-                "score": score,
+                "score": self._clamp_score(score),
                 "passed": False,
                 "error_type": error_type,
                 "feedback": feedback,
@@ -836,7 +817,7 @@ class SimpleEvaluationEngine:
             overlap = candidate_tokens.intersection(reference_tokens)
             score = len(overlap) / len(reference_tokens)
 
-        score = round(score, 4)
+        score = round(self._clamp_score(score), 4)
         passed = score >= 0.6
 
         return {
@@ -878,12 +859,19 @@ class SimpleEvaluationEngine:
         reference_answer: str,
     ) -> dict:
         prompt = f"""
-You are evaluating a student's answer.
+You are a strict semantic answer evaluator for a quiz system.
 
-Evaluate semantic correctness compared with the reference answer.
+Evaluate the student's answer against the reference answer.
+Do not grade writing style unless it affects meaning.
+Do not reward irrelevant or contradictory answers.
 
-Return only valid JSON:
+Return only valid JSON with this exact structure:
 {{
+  "semantic_correctness_score": 0.0,
+  "completeness_score": 0.0,
+  "relevance_score": 0.0,
+  "contradiction": false,
+  "unsupported_extra_claims": [],
   "score": 0.0,
   "passed": false,
   "feedback": "...",
@@ -891,6 +879,20 @@ Return only valid JSON:
   "correct_answer_explanation": "...",
   "learning_feedback": "..."
 }}
+
+Rubric:
+- semantic_correctness_score: Does the student answer express the same core meaning as the reference answer?
+- completeness_score: Does the student answer include the important required parts?
+- relevance_score: Does the answer address the question?
+- contradiction: Does the answer contradict the reference answer or the question?
+- unsupported_extra_claims: Does the answer add claims that are not needed and may be false or misleading?
+
+Scoring guidance:
+- 1.0 = fully correct and complete.
+- 0.7-0.9 = mostly correct with minor missing details.
+- 0.4-0.6 = partially correct but incomplete or imprecise.
+- 0.1-0.3 = mostly wrong but contains a small relevant idea.
+- 0.0 = empty, irrelevant, contradictory, or fully wrong.
 
 Question:
 {question.get("question", "")}
@@ -917,15 +919,20 @@ Reference answer:
         context = self._stringify_context(question.get("context", ""))
 
         prompt = f"""
-You are evaluating a student's answer for a context-based QA task.
+You are a strict context-grounded quiz evaluator.
 
-Evaluate:
-- correctness
-- relevance
-- whether the answer is supported by the provided context
+Use only the provided context and reference answer to judge the response.
+An answer that is generally true but not supported by the context must receive a low groundedness score.
+Do not use outside knowledge to fill missing support.
 
-Return only valid JSON:
+Return only valid JSON with this exact structure:
 {{
+  "relevance_score": 0.0,
+  "groundedness_score": 0.0,
+  "correctness_score": 0.0,
+  "completeness_score": 0.0,
+  "contradictions_with_context": [],
+  "unsupported_claims": [],
   "score": 0.0,
   "passed": false,
   "feedback": "...",
@@ -934,10 +941,23 @@ Return only valid JSON:
   "learning_feedback": "..."
 }}
 
+Rubric:
+1. relevance_score: Does the answer address the question?
+2. groundedness_score: Is the answer supported by the provided context?
+3. correctness_score: Is the answer consistent with the reference answer?
+4. completeness_score: Does the answer include the required key ideas?
+5. contradictions_with_context: List claims that conflict with the context.
+6. unsupported_claims: List claims that are not supported by the context.
+
+Important:
+- Do not use outside knowledge to fill missing support.
+- If the answer is correct according to outside knowledge but not supported by the context, groundedness_score must be low.
+- If the answer contradicts the context, final score must be low.
+
 Question:
 {question.get("question", "")}
 
-Context:
+Provided context:
 {context[:12000]}
 
 Student answer:
@@ -984,7 +1004,7 @@ Reference answer:
             parsed = self._parse_json_from_text(raw_text)
 
             score = self._safe_float(parsed.get("score", 0.0))
-            score = max(0.0, min(1.0, score))
+            score = self._clamp_score(score)
 
             passed = bool(parsed.get("passed", score >= 0.5))
 
@@ -993,6 +1013,15 @@ Reference answer:
                 "score": round(score, 4),
                 "passed": passed,
                 "details": parsed.get("details", {}),
+                "semantic_correctness_score": parsed.get("semantic_correctness_score"),
+                "completeness_score": parsed.get("completeness_score"),
+                "relevance_score": parsed.get("relevance_score"),
+                "groundedness_score": parsed.get("groundedness_score"),
+                "correctness_score": parsed.get("correctness_score"),
+                "contradiction": parsed.get("contradiction"),
+                "unsupported_extra_claims": parsed.get("unsupported_extra_claims", []),
+                "contradictions_with_context": parsed.get("contradictions_with_context", []),
+                "unsupported_claims": parsed.get("unsupported_claims", []),
                 "feedback": parsed.get("feedback", ""),
                 "wrong_answer_explanation": parsed.get("wrong_answer_explanation", ""),
                 "correct_answer_explanation": parsed.get("correct_answer_explanation", ""),
@@ -1082,11 +1111,11 @@ Reference answer:
             return 0.0
 
         scores = [
-            self._safe_float(output.get("score", 0.0))
+            self._clamp_score(output.get("score", 0.0))
             for output in evaluator_outputs
         ]
 
-        return sum(scores) / len(scores)
+        return self._clamp_score(sum(scores) / len(scores))
 
     def _combine_feedback(
         self,
